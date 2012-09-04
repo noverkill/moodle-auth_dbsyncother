@@ -49,7 +49,7 @@ require(dirname(dirname(dirname(dirname(__FILE__)))).'/config.php');
 require_once($CFG->dirroot.'/course/lib.php');
 require_once($CFG->libdir.'/clilib.php');
 
-// now get cli options
+// Now get cli options.
 list($options, $unrecognized) = cli_get_params(array('noupdate'=>false, 'verbose'=>false, 'help'=>false), array('n'=>'noupdate', 'v'=>'verbose', 'h'=>'help'));
 
 if ($unrecognized) {
@@ -79,7 +79,8 @@ Sample cron entry:
     die;
 }
 
-$verbose = !empty($options['verbose']);
+//$verbose = !empty($options['verbose']);
+$verbose = 1;
 $update = empty($options['noupdate']);
 
 $dbauth = get_auth_plugin('dbsyncother');
