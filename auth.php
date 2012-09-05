@@ -655,7 +655,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         }
 
         // save settings
-        set_config('host',          $config->host,          'auth/dbsyncothersyncother');
+        set_config('host',          $config->host,          'auth/dbsyncother');
         set_config('type',          $config->type,          'auth/dbsyncother');
         set_config('sybasequoting', $config->sybasequoting, 'auth/dbsyncother');
         set_config('name',          $config->name,          'auth/dbsyncother');
