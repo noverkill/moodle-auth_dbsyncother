@@ -113,7 +113,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         // If at least one field is mapped from external db, get that mapped data.
         if ($selectfields) {
             $select = '';
-            foreach ($selectfields as $localname=>$externalname) {
+            foreach ($selectfields as $localname => $externalname) {
                 $select .= ", $externalname AS $localname";
             }
             $select = 'SELECT ' . substr($select, 1);
@@ -125,7 +125,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 if ( !$rs->EOF ) {
                     $fields_obj = $rs->FetchObj();
                     $fields_obj = (object)array_change_key_case((array)$fields_obj , CASE_LOWER);
-                    foreach ($selectfields as $localname=>$externalname) {
+                    foreach ($selectfields as $localname => $externalname) {
                         $result[$localname] = textlib::convert($fields_obj->{$localname}, $this->config->extencoding, 'utf-8');
                      }
                  }
@@ -339,11 +339,6 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                         if ($verbose) {
                             mtrace("\t".get_string('auth_dbinsertuser', 'auth_dbsyncother', array('name'=>$user->username, 'id'=>$id)));
                         }
-                        // If relevant, tag for password generation.
-                        if ($this->is_internal()) {
-                            set_user_preference('auth_forcepasswordchange', 1, $id);
-                            set_user_preference('create_password',          1, $id);
-                        }
                     } catch (Exception $e) {
                         mtrace("\t".get_string('auth_dbinsertusererror', 'auth_dbsyncother', $user->username));
                         mtrace("\t".$e->getMessage());
@@ -533,17 +528,12 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
     }
 
     /**
-     * Returns true if this authentication plugin is "internal".
-     *
-     * Internal plugins use password hashes from Moodle user table for authentication.
+     * Returns true if this authentication plugin is 'internal'.
      *
      * @return bool
      */
     function is_internal() {
-        if (!isset($this->config->passtype)) {
-            return true;
-        }
-        return ($this->config->passtype === 'internal');
+        return false;
     }
 
     /**
