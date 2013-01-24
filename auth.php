@@ -309,7 +309,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 $user = $this->get_userinfo_asobj($user);
 
                 // Prep a few params.
-                $user->username   = $username;
+                $user->username   = utf8_encode($username);
                 $user->confirmed  = 1;
                 $user->auth       = $this->authtype;
                 $user->mnethostid = $CFG->mnet_localhost_id;
