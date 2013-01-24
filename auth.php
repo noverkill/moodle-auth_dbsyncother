@@ -126,7 +126,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                     $fields_obj = $rs->FetchObj();
                     $fields_obj = (object)array_change_key_case((array)$fields_obj , CASE_LOWER);
                     foreach ($selectfields as $localname => $externalname) {
-                        $result[$localname] = textlib::convert($fields_obj->{$localname}, $this->config->extencoding, 'utf-8');
+                        $result[$localname] = utf8_encode($fields_obj->{$localname});
                      }
                  }
                  $rs->Close();
