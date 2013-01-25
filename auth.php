@@ -102,8 +102,6 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
     function get_userinfo($username) {
         global $CFG;
 
-        // IDW 25/01/2013 The following UTF-8 conversion does not need to take place...
-        //$extusername = utf8_encode($username);
         $extusername = $username;
 
         $authdb = $this->db_init();
@@ -358,7 +356,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
     /// Init result value.
         $result = false;
 
-        $extusername = utf8_encode($username);
+        $extusername = $username;
 
         $authdb = $this->db_init();
 
@@ -432,7 +430,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         global $CFG, $DB;
 
         //just in case check text case
-        $username = trim(mb_strtolower($username));
+        $username = trim(strtolower($username));
 
         // get the current user record
         $user = $DB->get_record('user', array('username'=>$username, 'mnethostid'=>$CFG->mnet_localhost_id));
@@ -500,7 +498,8 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             return false;
         }
 
-        $extusername = utf8_encode($olduser->username);
+        $extusername = $olduser->username;
+
         $authdb = $this->db_init();
 
         $update = array();
