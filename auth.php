@@ -311,7 +311,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 $user = $this->get_userinfo_asobj($user);
 
                 // Prep a few params.
-                $user->username   = utf8_encode($username);
+                $user->username   = $username;
                 $user->confirmed  = 1;
                 $user->auth       = $this->authtype;
                 $user->mnethostid = $CFG->mnet_localhost_id;
@@ -393,7 +393,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         } else if (!$rs->EOF) {
             while ($rec = $rs->FetchRow()) {
                 $rec = (object)array_change_key_case((array)$rec , CASE_LOWER);
-                array_push($result, $rec->username);
+                array_push($result, utf8_encode($rec->username));
             }
         }
 
@@ -432,7 +432,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         global $CFG, $DB;
 
         //just in case check text case
-        $username = trim(textlib::strtolower($username));
+        $username = trim(mb_strtolower($username));
 
         // get the current user record
         $user = $DB->get_record('user', array('username'=>$username, 'mnethostid'=>$CFG->mnet_localhost_id));
