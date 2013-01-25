@@ -102,7 +102,9 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
     function get_userinfo($username) {
         global $CFG;
 
-        $extusername = textlib::convert($username, 'utf-8', $this->config->extencoding);
+        // IDW 25/01/2013 The following UTF-8 conversion does not need to take place...
+        //$extusername = utf8_encode($username);
+        $extusername = $username;
 
         $authdb = $this->db_init();
 
@@ -356,7 +358,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
     /// Init result value.
         $result = false;
 
-        $extusername = textlib::convert($username, 'utf-8', $this->config->extencoding);
+        $extusername = utf8_encode($username);
 
         $authdb = $this->db_init();
 
@@ -498,8 +500,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             return false;
         }
 
-        $extusername = textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
-
+        $extusername = utf8_encode($olduser->username);
         $authdb = $this->db_init();
 
         $update = array();
@@ -515,7 +516,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             }
             $nuvalue = $newuser->$key;
             if ($nuvalue != $value) {
-                $update[] = $this->config->{"field_map_$key"}."='".$this->ext_addslashes(textlib::convert($nuvalue, 'utf-8', $this->config->extencoding))."'";
+                $update[] = $this->config->{"field_map_$key"}."='".$this->ext_addslashes(utf8_encode($nuvalue))."'";
             }
         }
         if (!empty($update)) {
