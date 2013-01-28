@@ -71,7 +71,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         }
         $authdb->Connect($this->config->host, $this->config->user, $this->config->pass, $this->config->name, true);
         $authdb->SetFetchMode(ADODB_FETCH_ASSOC);
-        $authdb->Execute("SET NAMES 'utf8'");
+
         if (!empty($this->config->setupsql)) {
             $authdb->Execute($this->config->setupsql);
         }
