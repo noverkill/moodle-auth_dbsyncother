@@ -33,8 +33,6 @@ require_once($CFG->libdir.'/adodb/adodb.inc.php');
  */
 class auth_plugin_dbsyncother extends auth_plugin_base {
 
-    private $textlib;
-
     /**
      * Constructor.
      */
@@ -44,7 +42,6 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         if (empty($this->config->extencoding)) {
             $this->config->extencoding = 'utf-8';
         }
-        $this->textlib = new textlib();
     }
 
     /**
@@ -106,7 +103,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
     function get_userinfo($username) {
         global $CFG;
 
-        $extusername = $this->textlib->convert($username, 'utf-8', $this->config->extencoding);
+        $extusername = textlib::convert($username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
@@ -361,7 +358,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         /// Init result value.
         $result = false;
 
-        $extusername = $this->textlib->convert($username, 'utf-8', $this->config->extencoding);
+        $extusername = textlib::convert($username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
@@ -436,7 +433,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         global $CFG, $DB;
 
         //just in case check text case
-        $username = trim($this->textlib->strtolower($username));
+        $username = trim(textlib::strtolower($username));
 
         // get the current user record
         $user = $DB->get_record('user', array('username'=>$username, 'mnethostid'=>$CFG->mnet_localhost_id));
@@ -504,7 +501,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             return false;
         }
 
-        $extusername =$this->textlib->convert($olduser->username, 'utf-8', $this->config->extencoding);
+        $extusername =textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
@@ -521,7 +518,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             }
             $nuvalue = $newuser->$key;
             if ($nuvalue != $value) {
-                $update[] = $this->config->{"field_map_$key"}."='".$this->ext_addslashes($this->textlib->convert($nuvalue, 'utf-8', $this->config->extencoding))."'";
+                $update[] = $this->config->{"field_map_$key"}."='".$this->ext_addslashes(textlib::convert($nuvalue, 'utf-8', $this->config->extencoding))."'";
             }
         }
         if (!empty($update)) {
