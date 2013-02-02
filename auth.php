@@ -68,6 +68,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         }
         $authdb->Connect($this->config->host, $this->config->user, $this->config->pass, $this->config->name, true);
         $authdb->SetFetchMode(ADODB_FETCH_ASSOC);
+
         if (!empty($this->config->setupsql)) {
             $authdb->Execute($this->config->setupsql);
         }
@@ -120,16 +121,17 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             $sql = $select .
                 " FROM {$this->config->table}" .
                 " WHERE {$this->config->fielduser} = '".$this->ext_addslashes($extusername)."'";
+
             $rs = $authdb->Execute($sql);
             if ($rs) {
                 if ( !$rs->EOF ) {
                     $fields_obj = $rs->FetchObj();
                     $fields_obj = (object)array_change_key_case((array)$fields_obj , CASE_LOWER);
                     foreach ($selectfields as $localname => $externalname) {
-                        $result[$localname] = textlib::convert($fields_obj->{$localname}, $this->config->extencoding, 'utf-8');
-                     }
-                 }
-                 $rs->Close();
+                        $result[$localname] = $fields_obj->{$localname};
+                    }
+                }
+                $rs->Close();
             }
         }
         $authdb->Close();
@@ -353,7 +355,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
 
     function user_exists($username) {
 
-    /// Init result value.
+        /// Init result value.
         $result = false;
 
         $extusername = textlib::convert($username, 'utf-8', $this->config->extencoding);
@@ -377,14 +379,15 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
 
     function get_userlist() {
 
-    /// Init result value.
+        /// Init result value.
         $result = array();
 
         $authdb = $this->db_init();
 
         // Fetch userlist.
         $rs = $authdb->Execute("SELECT {$this->config->fielduser} AS username
-                                FROM   {$this->config->table} ");
+                                FROM   {$this->config->table}
+                                WHERE  username IS NOT NULL");
 
         if (!$rs) {
             print_error('auth_dbcantconnect', 'auth_dbsyncother');
@@ -498,7 +501,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             return false;
         }
 
-        $extusername = textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
+        $extusername =textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
@@ -673,5 +676,4 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         return $text;
     }
 }
-
 
