@@ -33,6 +33,8 @@ require_once($CFG->libdir.'/adodb/adodb.inc.php');
  */
 class auth_plugin_dbsyncother extends auth_plugin_base {
 
+    private $textlib;
+
     /**
      * Constructor.
      */
@@ -42,6 +44,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         if (empty($this->config->extencoding)) {
             $this->config->extencoding = 'utf-8';
         }
+        $this->textlib = new textlib();
     }
 
     /**
@@ -68,6 +71,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         }
         $authdb->Connect($this->config->host, $this->config->user, $this->config->pass, $this->config->name, true);
         $authdb->SetFetchMode(ADODB_FETCH_ASSOC);
+
         if (!empty($this->config->setupsql)) {
             $authdb->Execute($this->config->setupsql);
         }
@@ -102,7 +106,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
     function get_userinfo($username) {
         global $CFG;
 
-        $extusername = textlib::convert($username, 'utf-8', $this->config->extencoding);
+        $extusername = $this->textlib->convert($username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
@@ -120,16 +124,17 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             $sql = $select .
                 " FROM {$this->config->table}" .
                 " WHERE {$this->config->fielduser} = '".$this->ext_addslashes($extusername)."'";
+
             $rs = $authdb->Execute($sql);
             if ($rs) {
                 if ( !$rs->EOF ) {
                     $fields_obj = $rs->FetchObj();
                     $fields_obj = (object)array_change_key_case((array)$fields_obj , CASE_LOWER);
                     foreach ($selectfields as $localname => $externalname) {
-                        $result[$localname] = textlib::convert($fields_obj->{$localname}, $this->config->extencoding, 'utf-8');
-                     }
-                 }
-                 $rs->Close();
+                        $result[$localname] = $fields_obj->{$localname};
+                    }
+                }
+                $rs->Close();
             }
         }
         $authdb->Close();
@@ -353,10 +358,10 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
 
     function user_exists($username) {
 
-    /// Init result value.
+        /// Init result value.
         $result = false;
 
-        $extusername = textlib::convert($username, 'utf-8', $this->config->extencoding);
+        $extusername = $this->textlib->convert($username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
@@ -377,14 +382,15 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
 
     function get_userlist() {
 
-    /// Init result value.
+        /// Init result value.
         $result = array();
 
         $authdb = $this->db_init();
 
         // Fetch userlist.
         $rs = $authdb->Execute("SELECT {$this->config->fielduser} AS username
-                                FROM   {$this->config->table} ");
+                                FROM   {$this->config->table}
+                                WHERE  username IS NOT NULL");
 
         if (!$rs) {
             print_error('auth_dbcantconnect', 'auth_dbsyncother');
@@ -430,7 +436,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         global $CFG, $DB;
 
         //just in case check text case
-        $username = trim(textlib::strtolower($username));
+        $username = trim($this->textlib->strtolower($username));
 
         // get the current user record
         $user = $DB->get_record('user', array('username'=>$username, 'mnethostid'=>$CFG->mnet_localhost_id));
@@ -498,7 +504,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             return false;
         }
 
-        $extusername = textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
+        $extusername =$this->textlib->convert($olduser->username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
@@ -515,7 +521,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             }
             $nuvalue = $newuser->$key;
             if ($nuvalue != $value) {
-                $update[] = $this->config->{"field_map_$key"}."='".$this->ext_addslashes(textlib::convert($nuvalue, 'utf-8', $this->config->extencoding))."'";
+                $update[] = $this->config->{"field_map_$key"}."='".$this->ext_addslashes($this->textlib->convert($nuvalue, 'utf-8', $this->config->extencoding))."'";
             }
         }
         if (!empty($update)) {
@@ -673,5 +679,4 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         return $text;
     }
 }
-
 
