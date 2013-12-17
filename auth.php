@@ -285,24 +285,11 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         //
         // Create missing accounts.
         //
-        // NOTE: this is very memory intensive and generally inefficient.
-        $sql = 'SELECT u.id, u.username
+        $sql = "SELECT u.username
                 FROM {user} u
-                WHERE u.auth=\'' . $this->authtype . '\' AND u.deleted=\'0\'';
+                WHERE u.auth='$this->authtype' AND u.deleted=0";
 
-        $users = $DB->get_records_sql($sql);
-
-        // Simplify down to usernames.
-        $usernames = array();
-        if (!empty($users)) {
-            foreach ($users as $user) {
-                array_push($usernames, $user->username);
-            }
-            unset($users);
-        }
-
-        $add_users = array_diff($userlist, $usernames);
-        unset($usernames);
+        $add_users = array_diff($userlist, $DB->get_fieldset_sql($sql));
 
         if (!empty($add_users)) {
             if ($verbose) {
