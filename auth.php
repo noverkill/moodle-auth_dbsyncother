@@ -375,9 +375,10 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         $authdb = $this->db_init();
 
         // Fetch userlist.
+
         $rs = $authdb->Execute("SELECT {$this->config->fielduser} AS username
                                 FROM   {$this->config->table}
-                                WHERE  username IS NOT NULL");
+                                WHERE  {$this->config->fielduser} IS NOT NULL");
 
         if (!$rs) {
             print_error('auth_dbcantconnect', 'auth_dbsyncother');
