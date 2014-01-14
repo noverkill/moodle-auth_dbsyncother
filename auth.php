@@ -27,6 +27,7 @@ defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir.'/authlib.php');
 require_once($CFG->libdir.'/adodb/adodb.inc.php');
+require_once("$CFG->dirroot./user/lib.php");
 
 /**
  * External database authentication plugin.
@@ -176,6 +177,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
 
         // List external users.
         $userlist = $this->get_userlist();
+
         // Delete obsolete internal users.
         if (!empty($this->config->removeuser)) {
 
@@ -193,24 +195,25 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 $params = array();
                 $params['authtype'] = $this->authtype;
             }
+
             $remove_users = $DB->get_records_sql($sql, $params);
 
             if (!empty($remove_users)) {
-                if ($verbose) {
-                    mtrace(print_string('auth_dbuserstoremove', 'auth_dbsyncother', count($remove_users)));
-                }
 
+               $count=0;
                 foreach ($remove_users as $user) {
                     if ($this->config->removeuser == AUTH_REMOVEUSER_FULLDELETE) {
                         delete_user($user);
+                        $count++;
                         if ($verbose) {
                             mtrace("\t".get_string('auth_dbdeleteuser', 'auth_dbsyncother',
                                 array('name'=>$user->username, 'id'=>$user->id)));
                         }
-                    } else if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+                    } else if (!$user->suspended and $this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
+                       $count++;
                         $updateuser = new stdClass();
                         $updateuser->id   = $user->id;
-                        $updateuser->auth = 'nologin';
+                        $updateuser->suspended=1;
                         $updateuser->timemodified = time();
                         $DB->update_record('user', $updateuser);
                         if ($verbose) {
@@ -219,10 +222,14 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                         }
                     }
                 }
+
+                if ($verbose and $count) {
+                    mtrace(print_string('auth_dbuserstoremove', 'auth_dbsyncother', $count));
+                }
+
             }
             unset($remove_users); // Free mem!
         }
-
         if (!count($userlist)) {
             // Exit right here.
             // Nothing else to do.
@@ -236,6 +243,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             // Narrow down what fields we need to update.
             $all_keys = array_keys(get_object_vars($this->config));
             $updatekeys = array();
+
             foreach ($all_keys as $key) {
                 if (preg_match('/^field_updatelocal_(.+)$/', $key, $match)) {
                     if ($this->config->{$key} === 'onlogin') {
@@ -244,17 +252,22 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 }
             }
             // To debug: "print_r($all_keys); print_r($updatekeys);" .
-            unset($all_keys); unset($key);
+            unset($all_keys);
+            unset($key);
 
             // Only go ahead if we actually.
             // Have fields to update locally.
+
             if (!empty($updatekeys)) {
                 list($in_sql, $params) = $DB->get_in_or_equal($userlist, SQL_PARAMS_NAMED, 'u', true);
                 $params['authtype'] = $this->authtype;
+
                 $sql = "SELECT u.id, u.username
                           FROM {user} u
-                         WHERE u.auth=:authtype AND u.deleted=0 AND u.username {$in_sql}";
+                         WHERE u.auth=:authtype AND u.username {$in_sql}";
+
                 $update_users = $DB->get_records_sql($sql, $params);
+
                 if ($update_users) {
                     if ($verbose) {
                         mtrace("User entries to update: ".count($update_users));
@@ -282,33 +295,20 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         //
         // Create missing accounts.
         //
-        // NOTE: this is very memory intensive and generally inefficient.
-        $sql = 'SELECT u.id, u.username
+        $sql = "SELECT u.username
                 FROM {user} u
-                WHERE u.auth=\'' . $this->authtype . '\' AND u.deleted=\'0\'';
+                WHERE u.auth='$this->authtype' AND u.deleted=0 AND u.suspended=0";
 
-        $users = $DB->get_records_sql($sql);
-
-        // Simplify down to usernames.
-        $usernames = array();
-        if (!empty($users)) {
-            foreach ($users as $user) {
-                array_push($usernames, $user->username);
-            }
-            unset($users);
-        }
-
-        $add_users = array_diff($userlist, $usernames);
-        unset($usernames);
+        $add_users = array_diff($userlist, $DB->get_fieldset_sql($sql));
 
         if (!empty($add_users)) {
             if ($verbose) {
                 mtrace(get_string('auth_dbuserstoadd', 'auth_dbsyncother', count($add_users)));
             }
             $transaction = $DB->start_delegated_transaction();
-            foreach ($add_users as $user) {
-                $username = $user;
-                $user = $this->get_userinfo_asobj($user);
+
+            foreach ($add_users as $username) {
+                $user = $this->get_userinfo_asobj($username);
 
                 // Prep a few params.
                 $user->username   = $username;
@@ -319,18 +319,21 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                     $user->lang = $CFG->lang;
                 }
 
-                // Maybe the user has been deleted before.
-                $old_user = $DB->get_record('user', array('username'=>$user->username, 'deleted'=>1,
+                // Maybe the user has been deleted or suspended before.
+                $old_user = $DB->get_record('user', array('username'=>$user->username,
                     'mnethostid'=>$user->mnethostid, 'auth'=>$user->auth));
-                if ($old_user) {
-                    // Note: this undeleting is deprecated and will be eliminated soon.
-                    $DB->set_field('user', 'deleted', 0, array('id'=>$old_user->id));
-                    $DB->set_field('user', 'timemodified', time(), array('id'=>$old_user->id));
-                    if ($verbose) {
-                        mtrace("\t".get_string('auth_dbreviveduser', 'auth_dbsyncother',
-                            array('name'=>$old_user->username, 'id'=>$old_user->id)));
-                    }
+                if ($old_user)
+                {
+                   $old_user->suspended=0;
 
+                   // Note: this undeleting is deprecated and will be eliminated soon.
+                   $old_user->deleted=0;
+
+                   user_update_user($old_user);
+                   if ($verbose) {
+                      mtrace("\t".get_string('auth_dbreviveduser', 'auth_dbsyncother',
+                                             array('name'=>$old_user->username, 'id'=>$old_user->id)));
+                   }
                 } else {
                     $user->timecreated = time();
                     $user->timemodified = $user->timecreated;
@@ -348,7 +351,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 }
             }
             $transaction->allow_commit();
-            unset($add_users); // Free mem.
+            unset($add_users); // Free memory.
         }
         return 0;
     }
@@ -385,9 +388,10 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         $authdb = $this->db_init();
 
         // Fetch userlist.
+
         $rs = $authdb->Execute("SELECT {$this->config->fielduser} AS username
                                 FROM   {$this->config->table}
-                                WHERE  username IS NOT NULL");
+                                WHERE  {$this->config->fielduser} IS NOT NULL");
 
         if (!$rs) {
             print_error('auth_dbcantconnect', 'auth_dbsyncother');
