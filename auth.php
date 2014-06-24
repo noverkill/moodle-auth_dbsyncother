@@ -242,7 +242,8 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 }
             }
             // To debug: "print_r($all_keys); print_r($updatekeys);" .
-            unset($all_keys); unset($key);
+            unset($all_keys); 
+	    unset($key);
 
             // Only go ahead if we actually.
             // Have fields to update locally.
@@ -346,7 +347,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 }
             }
             $transaction->allow_commit();
-            unset($add_users); // Free mem.
+            unset($add_users); // Free memory.
         }
         return 0;
     }
@@ -503,7 +504,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             return false;
         }
 
-        $extusername = textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
+        $extusername =textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
