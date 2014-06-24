@@ -27,7 +27,6 @@ defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir.'/authlib.php');
 require_once($CFG->libdir.'/adodb/adodb.inc.php');
-require_once("$CFG->dirroot/user/lib.php");
 
 /**
  * External database authentication plugin.
@@ -69,7 +68,6 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         }
         $authdb->Connect($this->config->host, $this->config->user, $this->config->pass, $this->config->name, true);
         $authdb->SetFetchMode(ADODB_FETCH_ASSOC);
-
         if (!empty($this->config->setupsql)) {
             $authdb->Execute($this->config->setupsql);
         }
@@ -122,17 +120,16 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             $sql = $select .
                 " FROM {$this->config->table}" .
                 " WHERE {$this->config->fielduser} = '".$this->ext_addslashes($extusername)."'";
-
             $rs = $authdb->Execute($sql);
             if ($rs) {
                 if ( !$rs->EOF ) {
                     $fields_obj = $rs->FetchObj();
                     $fields_obj = (object)array_change_key_case((array)$fields_obj , CASE_LOWER);
                     foreach ($selectfields as $localname => $externalname) {
-                        $result[$localname] = $fields_obj->{$localname};
-                    }
-                }
-                $rs->Close();
+                        $result[$localname] = textlib::convert($fields_obj->{$localname}, $this->config->extencoding, 'utf-8');
+                     }
+                 }
+                 $rs->Close();
             }
         }
         $authdb->Close();
@@ -177,7 +174,6 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
 
         // List external users.
         $userlist = $this->get_userlist();
-
         // Delete obsolete internal users.
         if (!empty($this->config->removeuser)) {
 
@@ -195,25 +191,24 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 $params = array();
                 $params['authtype'] = $this->authtype;
             }
-
             $remove_users = $DB->get_records_sql($sql, $params);
 
             if (!empty($remove_users)) {
+                if ($verbose) {
+                    mtrace(print_string('auth_dbuserstoremove', 'auth_dbsyncother', count($remove_users)));
+                }
 
-               $count=0;
                 foreach ($remove_users as $user) {
                     if ($this->config->removeuser == AUTH_REMOVEUSER_FULLDELETE) {
                         delete_user($user);
-                        $count++;
                         if ($verbose) {
                             mtrace("\t".get_string('auth_dbdeleteuser', 'auth_dbsyncother',
                                 array('name'=>$user->username, 'id'=>$user->id)));
                         }
-                    } else if (!$user->suspended and $this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
-                       $count++;
+                    } else if ($this->config->removeuser == AUTH_REMOVEUSER_SUSPEND) {
                         $updateuser = new stdClass();
                         $updateuser->id   = $user->id;
-                        $updateuser->suspended=1;
+                        $updateuser->auth = 'nologin';
                         $updateuser->timemodified = time();
                         $DB->update_record('user', $updateuser);
                         if ($verbose) {
@@ -222,14 +217,10 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                         }
                     }
                 }
-
-                if ($verbose and $count) {
-                    mtrace(print_string('auth_dbuserstoremove', 'auth_dbsyncother', $count));
-                }
-
             }
             unset($remove_users); // Free mem!
         }
+
         if (!count($userlist)) {
             // Exit right here.
             // Nothing else to do.
@@ -243,7 +234,6 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             // Narrow down what fields we need to update.
             $all_keys = array_keys(get_object_vars($this->config));
             $updatekeys = array();
-
             foreach ($all_keys as $key) {
                 if (preg_match('/^field_updatelocal_(.+)$/', $key, $match)) {
                     if ($this->config->{$key} === 'onlogin') {
@@ -252,22 +242,17 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 }
             }
             // To debug: "print_r($all_keys); print_r($updatekeys);" .
-            unset($all_keys);
-            unset($key);
+            unset($all_keys); unset($key);
 
             // Only go ahead if we actually.
             // Have fields to update locally.
-
             if (!empty($updatekeys)) {
                 list($in_sql, $params) = $DB->get_in_or_equal($userlist, SQL_PARAMS_NAMED, 'u', true);
                 $params['authtype'] = $this->authtype;
-
                 $sql = "SELECT u.id, u.username
                           FROM {user} u
-                         WHERE u.auth=:authtype AND u.username {$in_sql}";
-
+                         WHERE u.auth=:authtype AND u.deleted=0 AND u.username {$in_sql}";
                 $update_users = $DB->get_records_sql($sql, $params);
-
                 if ($update_users) {
                     if ($verbose) {
                         mtrace("User entries to update: ".count($update_users));
@@ -295,20 +280,33 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         //
         // Create missing accounts.
         //
-        $sql = "SELECT u.username
+        // NOTE: this is very memory intensive and generally inefficient.
+        $sql = 'SELECT u.id, u.username
                 FROM {user} u
-                WHERE u.auth='$this->authtype' AND u.deleted=0 AND u.suspended=0";
+                WHERE u.auth=\'' . $this->authtype . '\' AND u.deleted=\'0\'';
 
-        $add_users = array_diff($userlist, $DB->get_fieldset_sql($sql));
+        $users = $DB->get_records_sql($sql);
+
+        // Simplify down to usernames.
+        $usernames = array();
+        if (!empty($users)) {
+            foreach ($users as $user) {
+                array_push($usernames, $user->username);
+            }
+            unset($users);
+        }
+
+        $add_users = array_diff($userlist, $usernames);
+        unset($usernames);
 
         if (!empty($add_users)) {
             if ($verbose) {
                 mtrace(get_string('auth_dbuserstoadd', 'auth_dbsyncother', count($add_users)));
             }
             $transaction = $DB->start_delegated_transaction();
-
-            foreach ($add_users as $username) {
-                $user = $this->get_userinfo_asobj($username);
+            foreach ($add_users as $user) {
+                $username = $user;
+                $user = $this->get_userinfo_asobj($user);
 
                 // Prep a few params.
                 $user->username   = $username;
@@ -319,21 +317,18 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                     $user->lang = $CFG->lang;
                 }
 
-                // Maybe the user has been deleted or suspended before.
-                $old_user = $DB->get_record('user', array('username'=>$user->username,
+                // Maybe the user has been deleted before.
+                $old_user = $DB->get_record('user', array('username'=>$user->username, 'deleted'=>1,
                     'mnethostid'=>$user->mnethostid, 'auth'=>$user->auth));
-                if ($old_user)
-                {
-                   $old_user->suspended=0;
+                if ($old_user) {
+                    // Note: this undeleting is deprecated and will be eliminated soon.
+                    $DB->set_field('user', 'deleted', 0, array('id'=>$old_user->id));
+                    $DB->set_field('user', 'timemodified', time(), array('id'=>$old_user->id));
+                    if ($verbose) {
+                        mtrace("\t".get_string('auth_dbreviveduser', 'auth_dbsyncother',
+                            array('name'=>$old_user->username, 'id'=>$old_user->id)));
+                    }
 
-                   // Note: this undeleting is deprecated and will be eliminated soon.
-                   $old_user->deleted=0;
-
-                   user_update_user($old_user);
-                   if ($verbose) {
-                      mtrace("\t".get_string('auth_dbreviveduser', 'auth_dbsyncother',
-                                             array('name'=>$old_user->username, 'id'=>$old_user->id)));
-                   }
                 } else {
                     $user->timecreated = time();
                     $user->timemodified = $user->timecreated;
@@ -351,14 +346,14 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                 }
             }
             $transaction->allow_commit();
-            unset($add_users); // Free memory.
+            unset($add_users); // Free mem.
         }
         return 0;
     }
 
     function user_exists($username) {
 
-        /// Init result value.
+    /// Init result value.
         $result = false;
 
         $extusername = textlib::convert($username, 'utf-8', $this->config->extencoding);
@@ -382,16 +377,14 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
 
     function get_userlist() {
 
-        /// Init result value.
+    /// Init result value.
         $result = array();
 
         $authdb = $this->db_init();
 
         // Fetch userlist.
-
         $rs = $authdb->Execute("SELECT {$this->config->fielduser} AS username
-                                FROM   {$this->config->table}
-                                WHERE  {$this->config->fielduser} IS NOT NULL");
+                                FROM   {$this->config->table} ");
 
         if (!$rs) {
             print_error('auth_dbcantconnect', 'auth_dbsyncother');
@@ -465,10 +458,15 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
                     $value = '';
                 }
 
-                if (!empty($this->config->{'field_updatelocal_' . $key})) {
-                    if (isset($user->{$key}) and $user->{$key} != $value) { // only update if it's changed
-                        $DB->set_field('user', $key, $value, array('id'=>$userid));
-                        $updated = true;
+                 if (!empty($this->config->{'field_updatelocal_' . $key})) {
+                    // Always compare original and new field values as strings
+                    if (isset($user->{$key})) { // only update the value if the original variable was set
+                        $orig_value = $user->{$key};
+                        $different = "$orig_value" !== "$value";
+                        if($different) { // only update if it's changed
+                            $DB->set_field('user', $key, $value, array('id'=>$userid));
+                            $updated = true;
+                        }
                     }
                 }
             }
@@ -505,7 +503,7 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
             return false;
         }
 
-        $extusername =textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
+        $extusername = textlib::convert($olduser->username, 'utf-8', $this->config->extencoding);
 
         $authdb = $this->db_init();
 
@@ -680,4 +678,5 @@ class auth_plugin_dbsyncother extends auth_plugin_base {
         return $text;
     }
 }
+
 
